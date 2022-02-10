@@ -17,7 +17,7 @@ ACC_TOKEN_SECRET=""
 BLOCK_FILEPATH=""
 PASS_FILEPATH=""
 CYCLE_NUM=175
-SLEEP_TIME=600
+SLEEP_TIME=900
 API_OAUTH_URL="https://api.twitter.com/oauth2/token"
 API_BASE_URL="https://api.twitter.com/2"
 API_LIMIT_URL="https://api.twitter.com/1.1/application/rate_limit_status.json"
@@ -149,12 +149,10 @@ def main():
     MakeAuthRequest()
     token = GetBearerToken()
     target_uid_list = GetTargetList()
-    global lookup_rem
     i = 0
     api = DoOAuthV1()
     l = list(target_uid_list)
     for id in target_uid_list:
-        r_l = len(target_uid_list)
         i += 1
         print("#" + str(i) + "--------")
         uid = id
@@ -176,10 +174,7 @@ def main():
         block_rem = d.get('resources').get('blocks').get('/blocks/ids').get('remaining')
         if DEBUG:
             print("rate-limit remaining:" + str(block_rem))
-        if block_rem % CYCLE_NUM == 0 or lookup_rem == 0:
-            r = block_rem if block_rem % CYCLE_NUM == 0 else lookup_rem
-            print("![INFO]reached the rate-limit. need " + \
-                datetime.datetime.fromtimestamp(float(r)).isoformat(' ', 'seconds') + "seconds to reset")
+        if i % CYCLE_NUM == 0:
             print("![INFO]wait for " + str(SLEEP_TIME) + "seconds")
             time.sleep(SLEEP_TIME)
             # OAuth again
