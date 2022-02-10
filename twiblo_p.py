@@ -31,7 +31,6 @@ def MakeAuthRequest():
     a = b.decode()
     if DEBUG:
         print(a)
-    # make header & body
     global header
     header = { \
         "Authorization" : "Basic" + " " + a, \
@@ -87,6 +86,8 @@ def GetUsersInfo(token, id, i):
     jd = resp.json()
     if DEBUG:
         print("rate-limit at {}:{}/{}({}sec)".format(sys._getframe().f_code.co_name, rem, lim, res))
+    global lookup_rem
+    lookup_rem = rem
     return jd
 
 # return: boolean
@@ -148,6 +149,7 @@ def main():
     MakeAuthRequest()
     token = GetBearerToken()
     target_uid_list = GetTargetList()
+    global lookup_rem
     i = 0
     api = DoOAuthV1()
     l = list(target_uid_list)
@@ -171,13 +173,14 @@ def main():
 
         # check rate_limit
         d = api.rate_limit_status(resources='blocks')   # dict
-        rem = d.get('resources').get('blocks').get('/blocks/ids').get('remaining')
+        block_rem = d.get('resources').get('blocks').get('/blocks/ids').get('remaining')
         if DEBUG:
-            print("rate-limit remaining:" + str(rem))
-        if rem % CYCLE_NUM == 0:
-            print("@reached the rate-limit. need " + \
-                datetime.datetime.fromtimestamp(rem).isoformat(' ', 'seconds') + "seconds to reset")
-            print("@wait for " + str(SLEEP_TIME) + "seconds")
+            print("rate-limit remaining:" + str(block_rem))
+        if block_rem % CYCLE_NUM == 0 or lookup_rem == 0:
+            r = block_rem if block_rem % CYCLE_NUM == 0 else lookup_rem
+            print("![INFO]reached the rate-limit. need " + \
+                datetime.datetime.fromtimestamp(float(r)).isoformat(' ', 'seconds') + "seconds to reset")
+            print("![INFO]wait for " + str(SLEEP_TIME) + "seconds")
             time.sleep(SLEEP_TIME)
             # OAuth again
             api = DoOAuthV1()
