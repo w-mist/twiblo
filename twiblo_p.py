@@ -1,11 +1,11 @@
 import base64
 import datetime
-import json
 import sys
 import time
 import datetime
 import requests
 import tweepy
+import random
 
 DEBUG=0
 #DEBUG=1
@@ -14,13 +14,15 @@ API_KEY=""
 API_SECRET=""
 ACC_TOKEN=""
 ACC_TOKEN_SECRET=""
-FILEPATH=""
+BLOCK_FILEPATH=""
+PASS_FILEPATH=""
+CYCLE_NUM=175
+SLEEP_TIME=600
 API_OAUTH_URL="https://api.twitter.com/oauth2/token"
 API_BASE_URL="https://api.twitter.com/2"
 API_LIMIT_URL="https://api.twitter.com/1.1/application/rate_limit_status.json"
 LIST_FOLLOWER=[]
 LIST_FOLLOWEE=[]
-
 
 def MakeAuthRequest():
     # encode by base64
@@ -29,6 +31,7 @@ def MakeAuthRequest():
     a = b.decode()
     if DEBUG:
         print(a)
+    # make header & body
     global header
     header = { \
         "Authorization" : "Basic" + " " + a, \
@@ -59,7 +62,7 @@ def GetBearerToken():
 def GetTargetList():
     lis = []
     # read from file
-    for i in open(FILEPATH, 'r'):
+    for i in open(BLOCK_FILEPATH, 'r'):
         li = i[:-1].split(',')
         lis = [str(uid) for uid in li]
     print("target ids=" + str(len(lis)) + " accounts")
@@ -116,21 +119,28 @@ def DoBlock(api, dict):
     name = dict.get("data").get("name") #str
     username = dict.get("data").get("username") #str
     verified = dict.get("data").get("verified") #boolean
+    wr = False
     if not IsMyFollower(id):
         if not IsMyFollowee(id):
             if not verified:
                 if DEBUG:
                     print("id:" + str(id) + " is not verified user")
                 api.create_block(user_id=id, include_entities=False, skip_status=True)
+                print("id:" + str(id) + " is blocked")
+                wr = False
             else:
-                print("*id:" + str(id) + " is verified user. pass")
-                # do nothing
+                print("**id:" + str(id) + " is verified user. pass")
+                wr = True
         else:
-            print("*id:" + str(id) + " is my foloweE. pass")
-            # do nothing
+            print("**id:" + str(id) + " is my foloweE. pass")
+            wr = True
     else:
-        print("*id:" + str(id) + " is my FolloweR. pass")
-        # do nothing
+        print("**id:" + str(id) + " is my FolloweR. pass")
+        wr = True
+    if wr:
+        f = open(PASS_FILEPATH, 'a')
+        f.write(str(id) + ",")
+        f.close()
 
 def main():
     if DEBUG:
@@ -142,20 +152,19 @@ def main():
     api = DoOAuthV1()
     l = list(target_uid_list)
     for id in target_uid_list:
+        r_l = len(target_uid_list)
         i += 1
         print("#" + str(i) + "--------")
         uid = id
         dict = GetUsersInfo(token, id, i)
         if not "errors" in dict:
             DoBlock(api, dict)
-            print("id:" + str(id) + " is blocked")
         else:
             print("![ERR] id:" + str(id) + " reason:" + dict.get("errors")[0].get("title"))
-#            continue
 
         # output to file
         l.remove(id)
-        f = open(FILEPATH, 'w')
+        f = open(BLOCK_FILEPATH, 'w')
         t = ",".join(l)
         f.write(t)
         f.close()
@@ -163,14 +172,16 @@ def main():
         # check rate_limit
         d = api.rate_limit_status(resources='blocks')   # dict
         rem = d.get('resources').get('blocks').get('/blocks/ids').get('remaining')
-        if rem == 0:
-            print("reached the rate-limit. reset: " + datetime.datetime.fromtimestamp(rem).isoformat(' ', 'seconds'))
-            break
         if DEBUG:
             print("rate-limit remaining:" + str(rem))
-        if i >= 50:
-            break
-        time.sleep(5)
+        if rem % CYCLE_NUM == 0:
+            print("@reached the rate-limit. need " + \
+                datetime.datetime.fromtimestamp(rem).isoformat(' ', 'seconds') + "seconds to reset")
+            print("@wait for " + str(SLEEP_TIME) + "seconds")
+            time.sleep(SLEEP_TIME)
+            # OAuth again
+            api = DoOAuthV1()
+        time.sleep(2+random.random())
 
 if __name__ == '__main__':
     main()
